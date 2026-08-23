@@ -64,6 +64,17 @@ const ALERT_EMAIL = "cjrolfe@icloud.com";
 // its own. Not a permanent lock after all; kept the original name.
 const MEDIA_SITE_BUCKET_NAME = `swordthain-site-${account}`;
 
+// Same reasoning again: MediaAppHostingStack (us-east-1) needs
+// MediaAppDataStack's (eu-west-1) MediaHttpApi by its execute-api hostname
+// only, for the new WAF-front-door CloudFront distribution — not a
+// construct reference, same cross-region boundary. Not computed the way
+// MEDIA_SITE_BUCKET_NAME is (API Gateway's generated ID isn't derivable),
+// so this is a literal that must be kept in sync by hand if the API is
+// ever recreated (also hardcoded identically in the CSP connect-src below,
+// apps/media-app/.env, apps/media-app-cli/src/config.ts, and
+// infra/regression-tests/src/config.ts).
+const MEDIA_API_DOMAIN_NAME = "ox8boap6v6.execute-api.eu-west-1.amazonaws.com";
+
 new MediaAppDataStack(app, "SwordthainMediaAppDataStack", {
   env: euWest1,
   // localhost:5173 (Vite's default dev port) is included for local admin
@@ -99,6 +110,7 @@ const mediaAppHostingStack = new MediaAppHostingStack(app, "SwordthainMediaAppHo
   siteDomainNames: ["swordthain.com", "www.swordthain.com"],
   siteCertificateArn: "arn:aws:acm:us-east-1:584000479246:certificate/710894e4-c91f-4986-a21d-812e52eaceb5",
   alertEmail: ALERT_EMAIL,
+  mediaApiDomainName: MEDIA_API_DOMAIN_NAME,
 });
 
 const playgroundStack = new PlaygroundStack(app, "SwordthainPlaygroundStack", {

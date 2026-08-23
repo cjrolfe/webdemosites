@@ -31,6 +31,14 @@ export interface MediaAppHostingStackProps extends StackProps {
   siteCertificateArn?: string;
   /** Where WAF security alarms are emailed. */
   alertEmail: string;
+  /**
+   * MediaHttpApi's execute-api hostname (no protocol), owned by
+   * MediaAppDataStack (eu-west-1). Referenced by name only, same
+   * cross-region reasoning as siteBucketName — the origin itself has no
+   * region requirement as a CloudFront origin, but the Distribution and
+   * its WAF ACL are forced to us-east-1.
+   */
+  mediaApiDomainName: string;
 }
 
 /**
@@ -43,6 +51,7 @@ export interface MediaAppHostingStackProps extends StackProps {
  */
 export class MediaAppHostingStack extends Stack {
   public readonly siteDistribution: cloudfront.Distribution;
+  public readonly apiDistribution: cloudfront.Distribution;
 
   constructor(scope: Construct, id: string, props: MediaAppHostingStackProps) {
     super(scope, id, props);
@@ -199,6 +208,88 @@ export class MediaAppHostingStack extends Stack {
     new CfnOutput(this, "SiteDistributionId", { value: this.siteDistribution.distributionId });
     new CfnOutput(this, "SiteDistributionDomainName", { value: this.siteDistribution.distributionDomainName });
 
+    // --- WAF front door for MediaHttpApi (eu-west-1) ---
+    // WAFv2 cannot attach to API Gateway HTTP APIs (v2) directly — only
+    // REST APIs (v1), CloudFront, ALB, etc. (see MediaAppDataStack's
+    // comment on this). This CloudFront distribution is the fix: same
+    // free managed rule groups as SiteWebAcl, fronting the API instead of
+    // the static site. Deliberately CACHING_DISABLED — every request is
+    // personalized (Authorization: Bearer <JWT>) and must never be cached.
+    // No custom domain: verified against this distribution's own
+    // *.cloudfront.net domain only, same two-phase pattern already used
+    // for SiteDistribution — api.swordthain.com is a separate, later step.
+    const apiWebAcl = new wafv2.CfnWebACL(this, "ApiWebAcl", {
+      name: "swordthain-api-waf",
+      scope: "CLOUDFRONT",
+      defaultAction: { allow: {} },
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: "swordthain-api-waf",
+      },
+      rules: [
+        {
+          name: "AWS-AWSManagedRulesCommonRuleSet",
+          priority: 0,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: { vendorName: "AWS", name: "AWSManagedRulesCommonRuleSet" },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: "swordthain-api-common",
+          },
+        },
+        {
+          name: "AWS-AWSManagedRulesKnownBadInputsRuleSet",
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: { vendorName: "AWS", name: "AWSManagedRulesKnownBadInputsRuleSet" },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: "swordthain-api-badinputs",
+          },
+        },
+        {
+          name: "AWS-AWSManagedRulesAmazonIpReputationList",
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: { vendorName: "AWS", name: "AWSManagedRulesAmazonIpReputationList" },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: "swordthain-api-ipreputation",
+          },
+        },
+      ],
+    });
+
+    this.apiDistribution = new cloudfront.Distribution(this, "ApiDistribution", {
+      comment: "apps/media-app HTTP API (WAF front door for MediaHttpApi)",
+      defaultBehavior: {
+        origin: new origins.HttpOrigin(props.mediaApiDomainName, {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        // Forwards all headers/cookies/querystring — required so the
+        // Authorization header reaches API Gateway's Cognito authorizer.
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        // Not just GET/HEAD like SiteDistribution's default behavior —
+        // the API takes GET/POST/PATCH/DELETE.
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+      },
+      webAclId: apiWebAcl.attrArn,
+    });
+
+    new CfnOutput(this, "ApiDistributionDomainName", { value: this.apiDistribution.distributionDomainName });
+
     // --- Security alerting: email if WAF starts blocking a lot of requests ---
     const siteAlertsTopic = new sns.Topic(this, "SiteAlertsTopic", {
       topicName: "swordthain-site-alerts",
@@ -214,6 +305,21 @@ export class MediaAppHostingStack extends Stack {
         // any rule" count, not a specific rule group — confirmed against
         // the real deployed metrics rather than assumed from docs.
         dimensionsMap: { WebACL: "swordthain-site-waf", Rule: "swordthain-site-waf" },
+        statistic: "Sum",
+        period: Duration.hours(1),
+      }),
+      threshold: 20,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(siteAlertsTopic));
+
+    new cloudwatch.Alarm(this, "ApiWafBlockedRequestsAlarm", {
+      alarmName: "swordthain-api-waf-blocked-requests",
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/WAFV2",
+        metricName: "BlockedRequests",
+        dimensionsMap: { WebACL: "swordthain-api-waf", Rule: "swordthain-api-waf" },
         statistic: "Sum",
         period: Duration.hours(1),
       }),
