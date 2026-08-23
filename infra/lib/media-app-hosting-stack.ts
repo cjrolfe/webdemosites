@@ -278,9 +278,14 @@ export class MediaAppHostingStack extends Stack {
         }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        // Forwards all headers/cookies/querystring — required so the
-        // Authorization header reaches API Gateway's Cognito authorizer.
-        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        // Forwards all headers/cookies/querystring (so the Authorization
+        // header reaches API Gateway's Cognito authorizer) EXCEPT Host —
+        // ALL_VIEWER forwards the viewer's Host (this distribution's own
+        // domain), which API Gateway's execute-api endpoint validates and
+        // rejects with a generic 403 ForbiddenException on mismatch,
+        // confirmed by comparing this distribution's response against the
+        // raw execute-api URL's (401, as expected) for the same request.
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
         // Not just GET/HEAD like SiteDistribution's default behavior —
         // the API takes GET/POST/PATCH/DELETE.
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
