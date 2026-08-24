@@ -129,85 +129,6 @@ export class MediaAppHostingStack extends Stack {
         ? acm.Certificate.fromCertificateArn(this, "SiteCertificate", props.siteCertificateArn)
         : undefined;
 
-    // CSP is scoped to this app's *real* network calls (not a generic
-    // template): the API Gateway and Cognito IDP for fetch()/sign-in, and
-    // the media S3 bucket for thumbnails/photos/video playback — omitting
-    // any of these would silently break the app (blank media grid, or
-    // nobody able to sign in at all).
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self'",
-      // 'unsafe-inline' here (script-src stays strict) is for Mermaid's
-      // client-rendered SVGs on the Architecture tab: mermaid.render()
-      // embeds a <style> block per diagram for theming, with no way to
-      // hash or nonce it from a static CDK config — same tradeoff already
-      // made for labs.swordthain.com's hand-written inline styles.
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' https://swordthain-media-584000479246.s3.eu-west-1.amazonaws.com",
-      "media-src 'self' https://swordthain-media-584000479246.s3.eu-west-1.amazonaws.com",
-      // The media bucket is also needed here (not just img-src/media-src):
-      // uploads PUT directly to S3 via a presigned URL from the browser's
-      // own XHR/fetch calls (FolderBrowser.tsx's single-PUT and multipart
-      // paths), which connect-src governs — img-src/media-src only cover
-      // passive <img>/<video> loads, not script-initiated requests.
-      "connect-src 'self' https://ox8boap6v6.execute-api.eu-west-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com https://swordthain-media-584000479246.s3.eu-west-1.amazonaws.com",
-      "frame-ancestors 'none'",
-    ].join("; ");
-
-    // `server: AmazonS3` and `x-amz-server-side-encryption` are the S3
-    // origin's untouched default headers, disclosing the hosting mechanism
-    // to anyone probing the site — overridden here. Permissions-Policy has
-    // no typed field on ResponseSecurityHeadersBehavior, so it's a plain
-    // custom header alongside those overrides.
-    const siteResponseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, "SiteResponseHeadersPolicy", {
-      responseHeadersPolicyName: "swordthain-site-security-headers",
-      comment: "Security headers + origin-header suppression for swordthain.com",
-      securityHeadersBehavior: {
-        contentSecurityPolicy: { contentSecurityPolicy: csp, override: true },
-        strictTransportSecurity: {
-          accessControlMaxAge: Duration.days(365),
-          includeSubdomains: true,
-          preload: true,
-          override: true,
-        },
-        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
-        contentTypeOptions: { override: true },
-        referrerPolicy: {
-          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
-          override: true,
-        },
-      },
-      customHeadersBehavior: {
-        customHeaders: [
-          { header: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), fullscreen=(self)", override: true },
-          { header: "Server", value: "cloudfront", override: true },
-        ],
-      },
-      // CloudFront may not permit overriding a reserved header like `Server`
-      // via customHeadersBehavior even with override:true — verify after
-      // deploy; if it doesn't take, a viewer-response CloudFront Function
-      // (matching the pattern already used for labs-stealth-gate.js) is the
-      // fallback rather than fighting the response headers policy.
-      removeHeaders: ["x-amz-server-side-encryption"],
-    });
-
-    this.siteDistribution = new cloudfront.Distribution(this, "SiteDistribution", {
-      comment: "apps/media-app static site (swordthain.com root domain)",
-      defaultRootObject: "index.html",
-      defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        responseHeadersPolicy: siteResponseHeadersPolicy,
-      },
-      webAclId: siteWebAcl.attrArn,
-      domainNames: siteCertificate ? props.siteDomainNames : undefined,
-      certificate: siteCertificate,
-    });
-
-    new CfnOutput(this, "SiteDistributionId", { value: this.siteDistribution.distributionId });
-    new CfnOutput(this, "SiteDistributionDomainName", { value: this.siteDistribution.distributionDomainName });
-
     // --- WAF front door for MediaHttpApi (eu-west-1) ---
     // WAFv2 cannot attach to API Gateway HTTP APIs (v2) directly — only
     // REST APIs (v1), CloudFront, ALB, etc. (see MediaAppDataStack's
@@ -218,6 +139,10 @@ export class MediaAppHostingStack extends Stack {
     // No custom domain: verified against this distribution's own
     // *.cloudfront.net domain only, same two-phase pattern already used
     // for SiteDistribution — api.swordthain.com is a separate, later step.
+    // Defined before the CSP below so its (randomly-assigned) domain name
+    // can be referenced as a real CDK token in connect-src, rather than a
+    // literal that would need hand-syncing if this distribution were ever
+    // recreated.
     const apiWebAcl = new wafv2.CfnWebACL(this, "ApiWebAcl", {
       name: "swordthain-api-waf",
       scope: "CLOUDFRONT",
@@ -294,6 +219,92 @@ export class MediaAppHostingStack extends Stack {
     });
 
     new CfnOutput(this, "ApiDistributionDomainName", { value: this.apiDistribution.distributionDomainName });
+
+    // CSP is scoped to this app's *real* network calls (not a generic
+    // template): the API Gateway and Cognito IDP for fetch()/sign-in, and
+    // the media S3 bucket for thumbnails/photos/video playback — omitting
+    // any of these would silently break the app (blank media grid, or
+    // nobody able to sign in at all).
+    //
+    // connect-src carries BOTH the raw execute-api URL and the new
+    // ApiDistribution's domain during the WAF cutover: apps/media-app/.env's
+    // VITE_API_URL still points at the raw URL at this stage, so this is a
+    // widen-only step with no functional change yet — removing the raw URL
+    // is a later, separate step once the frontend has actually cut over
+    // (see apps/media-app/BACKLOG.md's WAF entry for the full sequencing).
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      // 'unsafe-inline' here (script-src stays strict) is for Mermaid's
+      // client-rendered SVGs on the Architecture tab: mermaid.render()
+      // embeds a <style> block per diagram for theming, with no way to
+      // hash or nonce it from a static CDK config — same tradeoff already
+      // made for labs.swordthain.com's hand-written inline styles.
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' https://swordthain-media-584000479246.s3.eu-west-1.amazonaws.com",
+      "media-src 'self' https://swordthain-media-584000479246.s3.eu-west-1.amazonaws.com",
+      // The media bucket is also needed here (not just img-src/media-src):
+      // uploads PUT directly to S3 via a presigned URL from the browser's
+      // own XHR/fetch calls (FolderBrowser.tsx's single-PUT and multipart
+      // paths), which connect-src governs — img-src/media-src only cover
+      // passive <img>/<video> loads, not script-initiated requests.
+      `connect-src 'self' https://ox8boap6v6.execute-api.eu-west-1.amazonaws.com https://${this.apiDistribution.distributionDomainName} https://cognito-idp.us-east-1.amazonaws.com https://swordthain-media-584000479246.s3.eu-west-1.amazonaws.com`,
+      "frame-ancestors 'none'",
+    ].join("; ");
+
+    // `server: AmazonS3` and `x-amz-server-side-encryption` are the S3
+    // origin's untouched default headers, disclosing the hosting mechanism
+    // to anyone probing the site — overridden here. Permissions-Policy has
+    // no typed field on ResponseSecurityHeadersBehavior, so it's a plain
+    // custom header alongside those overrides.
+    const siteResponseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, "SiteResponseHeadersPolicy", {
+      responseHeadersPolicyName: "swordthain-site-security-headers",
+      comment: "Security headers + origin-header suppression for swordthain.com",
+      securityHeadersBehavior: {
+        contentSecurityPolicy: { contentSecurityPolicy: csp, override: true },
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: true,
+          preload: true,
+          override: true,
+        },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        contentTypeOptions: { override: true },
+        referrerPolicy: {
+          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+      },
+      customHeadersBehavior: {
+        customHeaders: [
+          { header: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), fullscreen=(self)", override: true },
+          { header: "Server", value: "cloudfront", override: true },
+        ],
+      },
+      // CloudFront may not permit overriding a reserved header like `Server`
+      // via customHeadersBehavior even with override:true — verify after
+      // deploy; if it doesn't take, a viewer-response CloudFront Function
+      // (matching the pattern already used for labs-stealth-gate.js) is the
+      // fallback rather than fighting the response headers policy.
+      removeHeaders: ["x-amz-server-side-encryption"],
+    });
+
+    this.siteDistribution = new cloudfront.Distribution(this, "SiteDistribution", {
+      comment: "apps/media-app static site (swordthain.com root domain)",
+      defaultRootObject: "index.html",
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        responseHeadersPolicy: siteResponseHeadersPolicy,
+      },
+      webAclId: siteWebAcl.attrArn,
+      domainNames: siteCertificate ? props.siteDomainNames : undefined,
+      certificate: siteCertificate,
+    });
+
+    new CfnOutput(this, "SiteDistributionId", { value: this.siteDistribution.distributionId });
+    new CfnOutput(this, "SiteDistributionDomainName", { value: this.siteDistribution.distributionDomainName });
 
     // --- Security alerting: email if WAF starts blocking a lot of requests ---
     const siteAlertsTopic = new sns.Topic(this, "SiteAlertsTopic", {
