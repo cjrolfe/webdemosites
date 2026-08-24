@@ -4,6 +4,17 @@ All notable changes to this project, by release date. Each entry corresponds to 
 
 This history was reconstructed retroactively (12 Aug 2026) from git log and `apps/media-app/BACKLOG.md`. The 10–12 Aug entries are detailed and cross-checked against BACKLOG.md's own dated entries; earlier entries are concise summaries derived from commit messages, not a full diff-by-diff account — honest about being reconstructed, not live-tracked from day one.
 
+## [2026.08.24]
+
+- **WAF bot-control in front of `MediaHttpApi` (stages 2-3)** — CSP `connect-src` widened to allow both the raw `execute-api` URL and the new CloudFront distribution's domain, then `apps/media-app/.env`'s `VITE_API_URL` cut over to the new domain. Verified live: real browser sign-in, folder/playlist listing, and a real POST all confirmed routing through the new CloudFront+WAF front door with identical behavior to the raw API, zero console/CSP errors. One remaining step (removing the old raw URL from `connect-src`, after a confidence window) stays open in `apps/media-app/BACKLOG.md`.
+- Architecture diagram updated (`Architecture.tsx` + `infra/docs/architecture-diagram.html`) with the new API CloudFront+WAF front door, including an explicit edge noting the CLI tool still bypasses it (known, accepted gap — see below).
+- Backlog cleanup: `apps/playground/BACKLOG.md`'s stale "Undocumented existing features" section removed (already resolved since 3 Aug); `apps/media-app/BACKLOG.md`'s Direct S3 mount entry moved to Settled decisions as a definitive no; Adaptive HLS, Passkey/WebAuthn, TfL, and Animal Shelter entries got benefit-framing prose explaining what they'd actually buy, not just why they're blocked.
+
+## [2026.08.23]
+
+- **WAF bot-control in front of `MediaHttpApi` (stage 1)** — new CloudFront distribution (`HttpOrigin` → `MediaHttpApi`, `CACHING_DISABLED`, full header passthrough) + a WAF ACL reusing the site's existing 3 free managed rule groups, deployed additively (CSP untouched, frontend unaffected). Found and fixed a real bug during verification: `OriginRequestPolicy.ALL_VIEWER` forwards the viewer's `Host` header, which API Gateway's `execute-api` endpoint validates and rejects — switched to `ALL_VIEWER_EXCEPT_HOST_HEADER`. Confirmed via side-by-side `curl` against the raw API that GET/POST, auth (401/200), and WAF (no false positives on a real JSON payload) all behave identically through the new front door.
+- **`robots.txt`** — `apps/media-app/public/robots.txt` (`Disallow: /`), matching the existing `noindex, nofollow` meta tag.
+
 ## [2026.08.17]
 
 - **Playlist orphaned-item cascade cleanup** — deleting a media item now removes any `PlaylistItems` rows referencing it, across every playlist that has it (new `byMedia` GSI on `PlaylistItemsTable`, queried by `deleteMedia`), and decrements each affected playlist's `itemCount` correctly. Previously the row was only ever tolerated as an advisory `available: false` at read time, accumulating forever. Going forward only — any orphans from the 11–17 Aug window weren't backfilled, since they're already tolerated the same way today.

@@ -17,6 +17,7 @@ flowchart TB
 
   subgraph EDGE["Edge — us-east-1"]
     siteCf["CloudFront<br/>swordthain.com"]:::edge
+    apiCf["CloudFront + WAF<br/>API front door"]:::edge
     labsCf["CloudFront<br/>labs.swordthain.com"]:::edge
   end
 
@@ -48,9 +49,10 @@ flowchart TB
     pgBucket[("S3: demo-sites bucket")]:::data
   end
 
-  familyBrowser --> siteCf --> mediaApi
+  familyBrowser --> siteCf
+  familyBrowser --> apiCf --> mediaApi
   ownerBrowser --> labsCf --> pgApi
-  cliTool --> mediaApi
+  cliTool -.->|"bypasses WAF —<br/>known, accepted gap"| mediaApi
   ghIssues --> pgAutomation
 
   familyBrowser -. sign in .-> cognito
