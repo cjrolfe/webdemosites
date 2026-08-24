@@ -2,7 +2,7 @@ name: Regression Test
 
 on:
   workflow_run:
-    workflows: ["Deploy Infra", "Deploy Media App"]
+    workflows: ["Deploy"]
     types: [completed]
 
 permissions:

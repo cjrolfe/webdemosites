@@ -1,0 +1,123 @@
+name: Deploy
+
+# Deploy Infra and Deploy Media App used to be two fully independent
+# workflows. A single push touching both infra/** and apps/media-app/**
+# (common — e.g. a CDK change that also needs a frontend env var update)
+# fired two separate deploy runs, each completing on its own schedule.
+# Regression Test/Accessibility Test listen for either one completing and
+# ran as soon as the FIRST of the two finished — sometimes testing a
+# half-deployed system and failing for reasons that had nothing to do with
+# the actual change. Merging into one workflow means exactly one
+# `workflow_run` completion event fires downstream, only once every job
+# that needed to run (infra, media-app, or both) actually has.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - "apps/media-app/**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      media-app: ${{ steps.filter.outputs.media-app }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        run: |
+          # github.event.before is all-zero on a branch's first push (no
+          # prior commit to diff against) — fall back to running both
+          # rather than erroring or silently skipping everything.
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "infra=true" >> "$GITHUB_OUTPUT"
+            echo "media-app=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -q '^infra/'; then
+            echo "infra=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "infra=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -q '^apps/media-app/'; then
+            echo "media-app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "media-app=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-infra:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: infra
+        run: npm ci
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::584000479246:role/swordthain-infra-ci
+          aws-region: us-east-1
+
+      - name: Deploy all stacks
+        working-directory: infra
+        run: npx cdk deploy --all --require-approval never
+
+  deploy-media-app:
+    needs: changes
+    if: needs.changes.outputs.media-app == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: apps/media-app
+        run: npm ci
+
+      - name: Build
+        working-directory: apps/media-app
+        run: npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::584000479246:role/swordthain-media-app-ci
+          aws-region: us-east-1
+
+      - name: Sync to S3
+        working-directory: apps/media-app
+        # Bucket is eu-west-1 (SwordthainMediaAppDataStack) even though this
+        # job's default region is us-east-1 (matching the CloudFront
+        # invalidation step below, which needs no region-specific override —
+        # see infra/README.md's "Region split" section) — explicit --region
+        # avoids a repeat of the real PermanentRedirect this exact class of
+        # region mismatch caused during the region migration.
+        run: aws s3 sync dist/ s3://swordthain-site-584000479246/ --delete --region eu-west-1
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id E2XHWRDIR9WK33 --paths "/*"
