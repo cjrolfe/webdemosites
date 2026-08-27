@@ -26,6 +26,21 @@ __pycache__
 .aws
 lambda.zip
 
+# graphify — machine-specific paths and regenerable extraction cache.
+# graph.json, GRAPH_REPORT.md, graph.html, manifest.json, and memory/ ARE
+# committed on purpose: they're what makes the graph available to any
+# future session/clone without a full rebuild.
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/.vocab.txt
+graphify-out/cache/
+graphify-out/cost.json
+
+# graphify's PreToolUse hook config hardcodes this machine's exact binary
+# path (/opt/homebrew/bin/graphify) — would break tool calls on any other
+# machine where graphify isn't installed at that exact location. Local only.
+.claude/settings.json
+
 # Lambda pip-installed deps (build with: pip install -r requirements.txt -t .)
 apps/playground/lambda/bin/
 apps/playground/lambda/bs4/

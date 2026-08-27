@@ -52,3 +52,13 @@ Docs have gone stale within the same session that produced a feature more than o
 - `CHANGELOG.md` (root) — when a chunk of shipped work is done (the same moment a `BACKLOG.md` "Recently shipped" entry would get added), add a dated entry there too and tag it: `git tag -a vYYYY.MM.DD -m "..."` (bump to `.2`/`.3` etc. if more than one release lands the same day), `git push --tags`, and optionally `gh release create` to match. See `CHANGELOG.md`'s own header for how the history back to Feb 2026 was reconstructed retroactively.
 
 Not every change needs all of these — a CSS tweak needs none of them, a new API route needs at least the relevant README and probably the architecture diagram. Use judgment, but *check* rather than assume no doc changes are needed.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
