@@ -8,12 +8,20 @@ import type { Session } from "./auth.js";
 // means we never touch the live OTP UI at all.
 const STORAGE_KEY = "swordthain_session";
 
-/** Seeds a session into localStorage before the app's own scripts run, so it loads already signed in. */
+// Matches apps/media-app/src/intro.ts's INTRO_SEEN_KEY. Every spec that
+// seeds a session wants a ready-to-test authenticated shell, not the
+// one-time splash intro sitting in front of it — splash.spec.ts seeds a
+// session directly (without this helper) for the cases that actually want
+// to exercise the splash itself.
+const INTRO_SEEN_KEY = "swordthain_intro_seen";
+
+/** Seeds a session (and suppresses the one-time splash intro) before the app's own scripts run, so it loads already signed in, straight to the authenticated shell. */
 export async function seedSession(page: Page, session: Session): Promise<void> {
   await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
+    ([sessionKey, sessionValue, introKey]) => {
+      window.localStorage.setItem(sessionKey, sessionValue);
+      window.localStorage.setItem(introKey, "1");
     },
-    [STORAGE_KEY, JSON.stringify(session)]
+    [STORAGE_KEY, JSON.stringify(session), INTRO_SEEN_KEY]
   );
 }

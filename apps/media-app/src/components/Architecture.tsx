@@ -32,12 +32,12 @@ flowchart TB
   end
 
   subgraph MEDIACOMPUTE["Media app compute — eu-west-1<br/>SwordthainMediaAppDataStack"]
-    mediaLambdas["9 Lambda functions<br/>upload · thumbnail · folders · shares<br/>invites · access · activity · playlists · stats"]:::compute
+    mediaLambdas["10 Lambda functions<br/>upload · thumbnail · folders · shares<br/>invites · access · activity · playlists · settings · stats"]:::compute
   end
 
   subgraph MEDIADATA["Media app data — eu-west-1"]
     mediaBucket[("S3: media bucket")]:::data
-    mediaTables[("DynamoDB: 6 tables")]:::data
+    mediaTables[("DynamoDB: 7 tables")]:::data
   end
 
   subgraph PGCOMPUTE["Playground compute — us-east-1"]
@@ -84,6 +84,7 @@ flowchart LR
   access["MediaAccessFn<br/>view/download URLs<br/>delete · edit description"]:::compute
   activity["ActivityFn"]:::compute
   playlists["PlaylistsFn"]:::compute
+  settings["SettingsFn"]:::compute
   stats["StatsFn"]:::compute
 
   mediaBucket[("media bucket<br/>private, presigned only")]:::data
@@ -93,6 +94,7 @@ flowchart LR
   activityT[("ActivityLog")]:::data
   playlistsT[("Playlists")]:::data
   playlistItemsT[("PlaylistItems")]:::data
+  settingsT[("AppSettings")]:::data
 
   identity["Cognito Admin API<br/>+ SES SendEmail"]:::auth
 
@@ -103,6 +105,7 @@ flowchart LR
   api -->|"/media/{id}/view-url<br/>/media/{id}/download-url<br/>DELETE·PATCH /media/{id}"| access
   api -->|"/admin/activity"| activity
   api -->|"/playlists*"| playlists
+  api -->|"GET·PATCH /settings"| settings
   api -->|"/admin/stats"| stats
 
   upload -->|PutObject| mediaBucket
@@ -131,6 +134,8 @@ flowchart LR
   playlists --> playlistsT
   playlists --> playlistItemsT
   playlists --> mediaItems
+
+  settings --> settingsT
 
   stats -. "CloudWatch metrics<br/>SES quota" .-> identity
   stats -.->|DescribeTable x6| mediaItems

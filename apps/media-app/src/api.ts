@@ -166,6 +166,9 @@ export const api = {
     request<{ deleted: boolean }>("DELETE", `/playlists/${playlistId}/items/${position}`),
   movePlaylistItem: (playlistId: string, position: number, direction: "up" | "down") =>
     request<{ swapped: [number, number] }>("PATCH", `/playlists/${playlistId}/items/${position}`, { direction }),
+
+  getSettings: () => request<AppSettings>("GET", "/settings"),
+  updateSettings: (introEnabled: boolean) => request<AppSettings>("PATCH", "/settings", { introEnabled }),
 };
 
 export interface ActivityEntry {
@@ -210,6 +213,10 @@ export interface PlaylistItem {
    * itself on this flag.
    */
   accessible: boolean;
+}
+
+export interface AppSettings {
+  introEnabled: boolean;
 }
 
 export interface StorageStats {

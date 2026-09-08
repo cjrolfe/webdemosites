@@ -170,6 +170,80 @@ body {
   color: #a8291f;
 }
 
+/* One-time studio-ident splash (Splash.tsx). Deliberately not themed via
+   light-dark() — same near-black background regardless of light/dark mode,
+   matching .login-page's own photographic background for the same reason:
+   it's a fixed, dramatic visual, not app chrome. z-index above
+   .idle-warning since it can only ever appear right after sign-in, before
+   the idle timer has anything to warn about, but keeping it strictly above
+   avoids relying on that ordering by accident. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: #000;
+  color: #fff;
+  opacity: 1;
+  transition: opacity 250ms ease-out;
+}
+
+.splash-fading {
+  opacity: 0;
+}
+
+.splash-prompt {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.splash-title {
+  /* Positioned over the crossguard in the generated poster frame — this is
+     the real "stamped" wordmark, crisp HTML text rather than anything
+     baked into the AI-generated image/video. */
+  margin: 38vh 0 0;
+  font-family: "Playfair Display", serif;
+  font-weight: 700;
+  font-size: 2.5rem;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85), 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+.splash-enter {
+  margin-top: auto;
+  margin-bottom: 12vh;
+  padding: 0.75rem 2.5rem;
+  font-size: 1.1rem;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+}
+
+.splash-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.splash-skip {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1;
+  padding: 0.4rem 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
 header {
   display: flex;
   justify-content: space-between;
@@ -646,6 +720,12 @@ table.matrix td {
   padding: 0.3rem 0;
 }
 
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Invitee-only readability pass for TV-sized screens (10-foot viewing
    distance). Scoped to .login-page/.member-theme so the Owner's admin
    view is untouched, and gated to very wide viewports so phone/laptop
@@ -717,5 +797,19 @@ table.matrix td {
   .member-theme .hint,
   .member-theme .empty {
     font-size: 1.3rem;
+  }
+
+  .splash-title {
+    font-size: 4rem;
+  }
+
+  .splash-enter {
+    font-size: 1.5rem;
+    padding: 1rem 3rem;
+  }
+
+  .splash-skip {
+    font-size: 1.2rem;
+    padding: 0.6rem 1.4rem;
   }
 }

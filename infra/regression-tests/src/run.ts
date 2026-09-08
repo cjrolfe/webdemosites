@@ -4,8 +4,9 @@ import * as smoke from "./scenarios/smoke.js";
 import * as folders from "./scenarios/folders.js";
 import * as media from "./scenarios/media.js";
 import * as playlists from "./scenarios/playlists.js";
+import * as settings from "./scenarios/settings.js";
 
-const SCENARIOS = { smoke, folders, media, playlists } as const;
+const SCENARIOS = { smoke, folders, media, playlists, settings } as const;
 
 async function main(): Promise<void> {
   const only = process.argv.includes("--only")

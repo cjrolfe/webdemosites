@@ -115,6 +115,7 @@ export class MediaAppDataStack extends Stack {
   public readonly activityLogTable: dynamodb.Table;
   public readonly playlistsTable: dynamodb.Table;
   public readonly playlistItemsTable: dynamodb.Table;
+  public readonly appSettingsTable: dynamodb.Table;
   public readonly siteBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: MediaAppDataStackProps) {
@@ -279,6 +280,16 @@ export class MediaAppDataStack extends Stack {
       indexName: "byMedia",
       partitionKey: { name: "mediaId", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "playlistId", type: dynamodb.AttributeType.STRING },
+    });
+
+    // Single-row app-wide config (currently just the splash intro's on/off
+    // switch, settingId "global") — no GSI needed, this table is never
+    // queried, only ever GetItem/PutItem'd by its fixed known key.
+    this.appSettingsTable = new dynamodb.Table(this, "AppSettingsTable", {
+      tableName: "swordthain-app-settings",
+      partitionKey: { name: "settingId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: RemovalPolicy.RETAIN,
     });
 
     const lambdaDir = path.join(__dirname, "..", "lambda", "media");
@@ -542,6 +553,25 @@ export class MediaAppDataStack extends Stack {
       })
     );
 
+    // --- App-wide settings (currently just the splash intro on/off switch)
+    // — GET is callable by every signed-in user (Owner and Member alike
+    // both need to know whether to show the intro), PUT is Owner-only,
+    // enforced inside the handler itself. ---
+    const settingsFn = new NodejsFunction(this, "SettingsFn", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(lambdaDir, "settings.ts"),
+      timeout: Duration.seconds(10),
+      memorySize: 256,
+      environment: {
+        SETTINGS_TABLE_NAME: this.appSettingsTable.tableName,
+      },
+      bundling: {
+        externalModules: [],
+      },
+    });
+    this.appSettingsTable.grantReadData(settingsFn);
+    this.appSettingsTable.grantWriteData(settingsFn);
+
     // --- Admin storage/health stats (S3 tier breakdown + cost estimate,
     // Lambda error counts, DynamoDB item counts, SES quota) — pulled live
     // from CloudWatch/DynamoDB/SES on each admin page load, no polling
@@ -570,6 +600,7 @@ export class MediaAppDataStack extends Stack {
           { label: "Media Access", functionName: mediaAccessFn.functionName },
           { label: "Activity", functionName: activityFn.functionName },
           { label: "Playlists", functionName: playlistsFn.functionName },
+          { label: "Settings", functionName: settingsFn.functionName },
         ]),
         // Must match the explicit `name` given to the WAF Web ACL in
         // MediaAppHostingStack (a different stack/region) — literal string
@@ -776,6 +807,16 @@ export class MediaAppDataStack extends Stack {
       authorizer,
     });
 
+    httpApi.addRoutes({
+      // PATCH, not PUT — this API's CORS preflight only allows
+      // POST/GET/PATCH/DELETE (matching every other route's convention),
+      // and PUT was never added to it.
+      path: "/settings",
+      methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PATCH],
+      integration: new HttpLambdaIntegration("SettingsIntegration", settingsFn),
+      authorizer,
+    });
+
     const mediaAccessIntegration = new HttpLambdaIntegration("MediaAccessIntegration", mediaAccessFn);
     httpApi.addRoutes({
       path: "/media/{mediaId}/view-url",
@@ -873,6 +914,7 @@ export class MediaAppDataStack extends Stack {
     new CfnOutput(this, "ActivityLogTableName", { value: this.activityLogTable.tableName });
     new CfnOutput(this, "PlaylistsTableName", { value: this.playlistsTable.tableName });
     new CfnOutput(this, "PlaylistItemsTableName", { value: this.playlistItemsTable.tableName });
+    new CfnOutput(this, "AppSettingsTableName", { value: this.appSettingsTable.tableName });
     new CfnOutput(this, "MediaApiUrl", { value: httpApi.apiEndpoint });
     new CfnOutput(this, "SiteBucketName", { value: this.siteBucket.bucketName });
   }

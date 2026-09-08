@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { loadSession, clearSession, isOwner, Session } from "./auth";
 import { useIdleTimeout } from "./useIdleTimeout";
+import { hasSeenIntro, prefersReducedMotion } from "./intro";
+import { api } from "./api";
 import { Login } from "./components/Login";
+import { Splash } from "./components/Splash";
 import { FolderBrowser } from "./components/FolderBrowser";
 import { PermissionsMatrix } from "./components/PermissionsMatrix";
 import { Friends } from "./components/Friends";
@@ -10,6 +13,7 @@ import { Storage } from "./components/Storage";
 import { Playlists } from "./components/Playlists";
 import { UploadTool } from "./components/UploadTool";
 import { Architecture } from "./components/Architecture";
+import { Settings } from "./components/Settings";
 
 type Tab =
   | "folders"
@@ -19,7 +23,8 @@ type Tab =
   | "activity"
   | "storage"
   | "upload-tool"
-  | "architecture";
+  | "architecture"
+  | "settings";
 
 const TAB_LABELS: Record<Tab, string> = {
   folders: "Folders",
@@ -30,13 +35,20 @@ const TAB_LABELS: Record<Tab, string> = {
   storage: "Storage",
   "upload-tool": "Upload Tool",
   architecture: "Architecture",
+  settings: "Settings",
 };
+
+/** "pending" while /settings is being checked, "show"/"skip" once decided. */
+type IntroDecision = "pending" | "show" | "skip";
 
 export function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession());
   const [tab, setTab] = useState<Tab>("folders");
   const owner = session ? isOwner(session) : false;
   const stayActiveRef = useRef<HTMLButtonElement>(null);
+  const [introDecision, setIntroDecision] = useState<IntroDecision>(() =>
+    hasSeenIntro() || prefersReducedMotion() ? "skip" : "pending"
+  );
 
   function handleSignOut() {
     clearSession();
@@ -60,8 +72,25 @@ export function App() {
     if (showWarning) stayActiveRef.current?.focus();
   }, [showWarning]);
 
+  // Only a first-time visitor whose browser hasn't seen the intro (and
+  // doesn't prefer reduced motion) ever reaches "pending" — everyone else
+  // skips this fetch entirely. Runs after the session check below is known
+  // to have a token, since /settings requires being signed in.
+  useEffect(() => {
+    if (!session || introDecision !== "pending") return;
+    api
+      .getSettings()
+      .then((s) => setIntroDecision(s.introEnabled ? "show" : "skip"))
+      .catch(() => setIntroDecision("skip")); // fail safe: never block app load over a decorative feature
+  }, [session, introDecision]);
+
   if (!session) {
     return <Login onLogin={setSession} />;
+  }
+
+  if (introDecision === "pending") return null; // brief beat while /settings resolves
+  if (introDecision === "show") {
+    return <Splash onDone={() => setIntroDecision("skip")} />;
   }
 
   return (
@@ -147,6 +176,13 @@ export function App() {
               >
                 Architecture
               </button>
+              <button
+                className={tab === "settings" ? "active" : ""}
+                aria-current={tab === "settings" ? "page" : undefined}
+                onClick={() => setTab("settings")}
+              >
+                Settings
+              </button>
             </>
           )}
         </nav>
@@ -160,6 +196,7 @@ export function App() {
           {owner && tab === "storage" && <Storage />}
           {owner && tab === "upload-tool" && <UploadTool />}
           {owner && tab === "architecture" && <Architecture />}
+          {owner && tab === "settings" && <Settings />}
         </main>
       </div>
     </div>

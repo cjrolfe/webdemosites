@@ -4,6 +4,10 @@ All notable changes to this project, by release date. Each entry corresponds to 
 
 This history was reconstructed retroactively (12 Aug 2026) from git log and `apps/media-app/BACKLOG.md`. The 10–12 Aug entries are detailed and cross-checked against BACKLOG.md's own dated entries; earlier entries are concise summaries derived from commit messages, not a full diff-by-diff account — honest about being reconstructed, not live-tracked from day one.
 
+## [2026.09.08]
+
+- **Splash intro + admin kill switch** — a one-time "studio ident" splash (`Splash.tsx`) plays right after sign-in: an AI-generated broadsword push-in video with a real HTML "Swordthain" wordmark stamped over the crossguard (never baked into the generated pixels, so it stays crisp) plus a cinematic music sting. Click-to-enter, since sound can't reliably autoplay without a prior user gesture — same trick `Lightbox.tsx`'s own `<video>` already relies on. Shown once per browser ever (`localStorage`), skipped entirely for `prefers-reduced-motion`, always skippable. Plays after sign-in rather than before Login specifically so its new admin kill switch (a global on/off toggle in a new Owner-only Settings tab, backed by a new `AppSettingsTable` + `settings.ts` Lambda) can check a real server-side setting — this API has no unauthenticated routes, so checking one before a session exists wasn't an option.
+
 ## [2026.08.24]
 
 - **WAF bot-control in front of `MediaHttpApi` (stages 2-3)** — CSP `connect-src` widened to allow both the raw `execute-api` URL and the new CloudFront distribution's domain, then `apps/media-app/.env`'s `VITE_API_URL` cut over to the new domain. Verified live: real browser sign-in, folder/playlist listing, and a real POST all confirmed routing through the new CloudFront+WAF front door with identical behavior to the raw API, zero console/CSP errors. One remaining step (removing the old raw URL from `connect-src`, after a confidence window) stays open in `apps/media-app/BACKLOG.md`.

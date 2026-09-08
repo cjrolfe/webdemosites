@@ -8,6 +8,12 @@ export const COGNITO_CLIENT_ID = process.env.SWORDTHAIN_COGNITO_CLIENT_ID ?? "71
 // served build, not just a local dev server.
 export const BASE_URL = process.env.SWORDTHAIN_A11Y_BASE_URL ?? "https://swordthain.com";
 
+// Matches infra/regression-tests/src/config.ts's API_URL — used only by
+// splash.spec.ts, to call PATCH /settings directly as Owner (the kill
+// switch is a real backend setting, not something the browser alone can
+// exercise).
+export const API_URL = process.env.SWORDTHAIN_API_URL ?? "https://ox8boap6v6.execute-api.eu-west-1.amazonaws.com";
+
 // Matches infra/lib/auth-stack.ts's regressionTestEmail/regressionTestOtpParam
 // constants and infra/lib/ci-stack.ts's A11yTestCiRole grant — same fixed-OTP
 // account infra/regression-tests uses, since it's Owner-privileged and

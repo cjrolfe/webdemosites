@@ -71,6 +71,10 @@ export function makeApi(idToken: string) {
       request<{ position: number }>("POST", `/playlists/${playlistId}/items`, idToken, { mediaId }),
     removePlaylistItem: (playlistId: string, position: number) =>
       request<{ deleted: boolean }>("DELETE", `/playlists/${playlistId}/items/${position}`, idToken),
+
+    getSettings: () => request<{ introEnabled: boolean }>("GET", "/settings", idToken),
+    updateSettings: (introEnabled: boolean) =>
+      request<{ introEnabled: boolean }>("PATCH", "/settings", idToken, { introEnabled }),
   };
 }
 
