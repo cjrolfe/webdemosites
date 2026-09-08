@@ -1,0 +1,102 @@
+{
+  "generated_at": "2026-09-08T15:06:21.688973+00:00",
+  "nodes": {
+    "apps_playground_lambda_lambda_function": {
+      "code_fingerprint": "e75f79487bd9388b716dfa6f87da8faf32e17c749c71879b216370b3121a199b",
+      "label": "lambda_function.py",
+      "last": "2026-08-27T17:43:08.578403+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-27T17:43:08.578403+00:00",
+          "outcome": "useful",
+          "q": "Why does isOwner() connect Media Delete & Cleanup Lambda to Invite Email Lambda, Stats/Cost Dashboard Lambda, Activity Log Lambda, API Testing Proxy Lambda, Folder Access Resolution, Playlists Lambda Handler, Folder Share Notifications, Multipart Upload Lambda?"
+        }
+      ],
+      "score": 0.759767129,
+      "source_file": "apps/playground/lambda/lambda_function.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "concept_cognito_owner_authorizer": {
+      "code_fingerprint": "0d26610a714c46126b8ac1d0aa99573caca7d07b9ca5734b34bca29961c6bc4b",
+      "label": "Cognito Owner-group Authorizer",
+      "last": "2026-08-27T17:43:08.578403+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-27T17:43:08.578403+00:00",
+          "outcome": "useful",
+          "q": "Why does isOwner() connect Media Delete & Cleanup Lambda to Invite Email Lambda, Stats/Cost Dashboard Lambda, Activity Log Lambda, API Testing Proxy Lambda, Folder Access Resolution, Playlists Lambda Handler, Folder Share Notifications, Multipart Upload Lambda?"
+        }
+      ],
+      "score": 0.759767129,
+      "source_file": "apps/playground/CLAUDE.md",
+      "status": "tentative",
+      "uses": 1
+    },
+    "infra_lambda_media_http": {
+      "code_fingerprint": "91a780c49d804f8993494c60db21dc443d2fc94685293d0c8f6d6e0e7d970abd",
+      "label": "http.ts",
+      "last": "2026-08-27T17:51:27.766441+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-27T17:51:27.766441+00:00",
+          "outcome": "useful",
+          "q": "Trace jsonResponse() - why is it the #1 god node with 47 edges?"
+        }
+      ],
+      "score": 0.759868559,
+      "source_file": "infra/lambda/media/http.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "infra_lambda_media_media_access_deletemedia": {
+      "code_fingerprint": "4af41fc36eaf00036e1e4a5d7e609d9372a590ce4ff6916f47dc8aece254f87c",
+      "label": "deleteMedia()",
+      "last": "2026-08-27T17:43:08.578403+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-27T17:43:08.578403+00:00",
+          "outcome": "useful",
+          "q": "Why does isOwner() connect Media Delete & Cleanup Lambda to Invite Email Lambda, Stats/Cost Dashboard Lambda, Activity Log Lambda, API Testing Proxy Lambda, Folder Access Resolution, Playlists Lambda Handler, Folder Share Notifications, Multipart Upload Lambda?"
+        }
+      ],
+      "score": 0.759767129,
+      "source_file": "infra/lambda/media/media-access.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "infra_lambda_media_media_access_updatemedia": {
+      "code_fingerprint": "4af41fc36eaf00036e1e4a5d7e609d9372a590ce4ff6916f47dc8aece254f87c",
+      "label": "updateMedia()",
+      "last": "2026-08-27T17:43:08.578403+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-27T17:43:08.578403+00:00",
+          "outcome": "useful",
+          "q": "Why does isOwner() connect Media Delete & Cleanup Lambda to Invite Email Lambda, Stats/Cost Dashboard Lambda, Activity Log Lambda, API Testing Proxy Lambda, Folder Access Resolution, Playlists Lambda Handler, Folder Share Notifications, Multipart Upload Lambda?"
+        }
+      ],
+      "score": 0.759767129,
+      "source_file": "infra/lambda/media/media-access.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "infra_lambda_media_playlists_denyresponse": {
+      "code_fingerprint": "15517fe82398309a3a766e2445228b0bedb79b490b13e7e9d9a4c4266664cde9",
+      "label": "denyResponse()",
+      "last": "2026-08-27T17:51:27.766441+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-27T17:51:27.766441+00:00",
+          "outcome": "useful",
+          "q": "Trace jsonResponse() - why is it the #1 god node with 47 edges?"
+        }
+      ],
+      "score": 0.759868559,
+      "source_file": "infra/lambda/media/playlists.ts",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}
